@@ -180,18 +180,18 @@ def ask_user_confirmation(action_name, action_parameters):
 ###
 def save(memory, agent_actions={}, localagi=None):
     q = json.loads(memory)
-    logger.info(">>> saving to memories: ") 
+    logger.info(">>> saving to memories: ")
     logger.info(q["content"])
     chroma_client.add_texts([q["content"]],[{"id": str(uuid.uuid4())}])
     chroma_client.persist()
-    return f"The object was saved permanently to memory."
+    return "The object was saved permanently to memory."
 
 def search_memory(query, agent_actions={}, localagi=None):
     q = json.loads(query)
     docs = chroma_client.similarity_search(q["reasoning"])
     text_res="Memories found in the database:\n"
     for doc in docs:
-        text_res+="- "+doc.page_content+"\n"
+        text_res += f"- {doc.page_content}" + "\n"
 
     #if args.postprocess:
     #    return post_process(text_res)
@@ -264,13 +264,9 @@ def search_duckduckgo(a, agent_actions={}, localagi=None):
     a = json.loads(a)
     list=ddg(a["query"], args.search_results)
 
-    text_res=""   
-    for doc in list:
-        text_res+=f"""{doc["link"]}: {doc["title"]} {doc["snippet"]}\n"""  
-
-    #if args.postprocess:
-    #    return post_process(text_res)
-    return text_res
+    return "".join(
+        f"""{doc["link"]}: {doc["title"]} {doc["snippet"]}\n""" for doc in list
+    )
     #l = json.dumps(list)
     #return l
 
@@ -391,9 +387,7 @@ if __name__ == "__main__":
         logger.info("Creating avatar, please wait...")
         display_avatar(localagi)
 
-    actions = ""
-    for action in agent_actions:
-        actions+=" '"+action+"'"
+    actions = "".join(f" '{action}'" for action in agent_actions)
     logger.info("LocalAGI internally can do the following actions:{actions}", actions=actions)
 
     if not args.prompt:

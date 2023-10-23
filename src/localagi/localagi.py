@@ -38,29 +38,29 @@ class LocalAGI:
         self.action_callback = action_callback
         self.reasoning_callback = reasoning_callback
         self.agent_actions[plan_action] = {
-                                            "function": self.generate_plan,
-                                            "plannable": False,
-                                            "description": 'The assistant for solving complex tasks that involves calling more functions in sequence, replies with the action "'+plan_action+'".',
-                                            "signature": {
-                                                "name": plan_action,
-                                                "description": """Plan complex tasks.""",
-                                                "parameters": {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "description": {
-                                                            "type": "string",
-                                                            "description": "reasoning behind the planning"
-                                                        },
-                                                    },
-                                                    "required": ["description"]
-                                                }
-                                            },
-                                        }
+            "function": self.generate_plan,
+            "plannable": False,
+            "description": f'The assistant for solving complex tasks that involves calling more functions in sequence, replies with the action "{plan_action}".',
+            "signature": {
+                "name": plan_action,
+                "description": """Plan complex tasks.""",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "description": {
+                            "type": "string",
+                            "description": "reasoning behind the planning",
+                        },
+                    },
+                    "required": ["description"],
+                },
+            },
+        }
         self.agent_actions[reply_action] = {
-                                        "function": None,
-                                        "plannable": False,
-                                        "description": 'For replying to the user, the assistant replies with the action "'+reply_action+'" and the reply to the user directly when there is nothing to do.',
-                                    }
+            "function": None,
+            "plannable": False,
+            "description": f'For replying to the user, the assistant replies with the action "{reply_action}" and the reply to the user directly when there is nothing to do.',
+        }
         self.tts_api_base = tts_api_base if tts_api_base else self.api_base
         self.stablediffusion_api_base = stablediffusion_api_base if stablediffusion_api_base else self.api_base
         self.tts_model = tts_model
@@ -71,10 +71,7 @@ class LocalAGI:
     # Function to create images with LocalAI
     def get_avatar(self, input_text):
         response = openai.Image.create(
-            prompt=input_text,
-            n=1,
-            size="128x128",
-            api_base=self.sta+"/v1"
+            prompt=input_text, n=1, size="128x128", api_base=f"{self.sta}/v1"
         )
         return response['data'][0]['url']
 
@@ -95,7 +92,7 @@ class LocalAGI:
         input_text = input_text.replace("\n", ".")
 
         # get from OPENAI_API_BASE env var
-        url = self.tts_api_base + '/tts'
+        url = f'{self.tts_api_base}/tts'
         headers = {'Content-Type': 'application/json'}
         data = {
             "input": input_text,
@@ -118,15 +115,15 @@ class LocalAGI:
         # Get the descriptions and the actions name (the keys)
         descriptions=self.action_description("", agent_actions)
 
-        messages = [
-                {"role": "user",
-                "content": f"""Transcript of AI assistant responding to user requests. Replies with the action to perform and the reasoning.
+            messages = [
+                    {"role": "user",
+                    "content": f"""Transcript of AI assistant responding to user requests. Replies with the action to perform and the reasoning.
     {descriptions}"""},
-                {"role": "user",
-    "content": f"""{user_input}
+                    {"role": "user",
+        "content": f"""{user_input}
 Function call: """
-                }
-            ]
+                    }
+                ]
         functions = [
             {
             "name": "intent",
@@ -157,15 +154,13 @@ Function call: """
             },    
         ]
         response = openai.ChatCompletion.create(
-            #model="gpt-3.5-turbo",
             model=self.functions_model,
             messages=messages,
             request_timeout=1200,
             functions=functions,
-            api_base=self.api_base+"/v1",
+            api_base=f"{self.api_base}/v1",
             stop=None,
             temperature=0.1,
-            #function_call="auto"
             function_call={"name": "intent"},
         )
         response_message = response["choices"][0]["message"]
@@ -174,19 +169,18 @@ Function call: """
             function_parameters = response.choices[0].message["function_call"].arguments
             # read the json from the string
             res = json.loads(function_parameters)
-            logger.debug(">>> function name: "+function_name)
-            logger.debug(">>> function parameters: "+function_parameters)
+            logger.debug(f">>> function name: {function_name}")
+            logger.debug(f">>> function parameters: {function_parameters}")
             return res
         return {"action": self.reply_action}
 
     # This is used to collect the descriptions of the agent actions, used to populate the LLM prompt
     def action_description(self, action, agent_actions):
-        descriptions=""
-        # generate descriptions of actions that the agent can pick
-        for a in agent_actions:
-            if ( action != "" and action == a ) or (action == ""):
-                descriptions+=agent_actions[a]["description"]+"\n"
-        return descriptions
+        return "".join(
+            agent_actions[a]["description"] + "\n"
+            for a in agent_actions
+            if (action != "" and action == a) or (action == "")
+        )
 
 
     ### This function is used to process the functions given a user input.
@@ -237,28 +231,23 @@ Function call: """
 
     ### function_completion is used to autocomplete functions given a list of messages
     def function_completion(self, messages, action=""):
-        function_call = "auto"
-        if action != "":
-            function_call={"name": action}
+        function_call = {"name": action} if action != "" else "auto"
         logger.debug("==> function name: {function_call}", function_call=function_call)
-        # get the functions from the signatures of the agent actions, if exists
-        functions = []
-        for action in self.agent_actions:
-            if self.agent_actions[action].get("signature"):
-                functions.append(self.agent_actions[action]["signature"])
-        response = openai.ChatCompletion.create(
-            #model="gpt-3.5-turbo",
+        functions = [
+            self.agent_actions[action]["signature"]
+            for action in self.agent_actions
+            if self.agent_actions[action].get("signature")
+        ]
+        return openai.ChatCompletion.create(
             model=self.functions_model,
             messages=messages,
             functions=functions,
             request_timeout=1200,
             stop=None,
-            api_base=self.api_base+"/v1",
+            api_base=f"{self.api_base}/v1",
             temperature=0.1,
-            function_call=function_call
+            function_call=function_call,
         )
-
-        return response
 
     # Rework the content of each message in the history in a way that is understandable by the LLM
     # TODO: switch to templates (?)
@@ -290,7 +279,7 @@ Function call: """
             model=self.llm_model,
             messages=responses,
             stop=None,
-            api_base=self.api_base+"/v1",
+            api_base=f"{self.api_base}/v1",
             request_timeout=1200,
             temperature=0.1,
         )
@@ -330,12 +319,12 @@ Function call: """
 
         if suffix != "":
             messages[0]["content"]+=f"""{suffix}"""
-    
+
         response = openai.ChatCompletion.create(
             model=self.llm_model,
             messages=messages,
             stop=None,
-            api_base=self.api_base+"/v1",
+            api_base=f"{self.api_base}/v1",
             request_timeout=1200,
             temperature=0.1,
         )
@@ -358,7 +347,7 @@ Function call: """
         response = openai.ChatCompletion.create(
             model=self.llm_model,
             messages=messages,
-            api_base=self.api_base+"/v1",
+            api_base=f"{self.api_base}/v1",
             stop=None,
             temperature=0.1,
             request_timeout=1200,
@@ -387,13 +376,11 @@ Function call: """
     Function call: """
                 }
             ]
-        # get list of plannable actions
-        plannable_actions = []
-        for action in agent_actions:
-            if agent_actions[action]["plannable"]:
-                # append the key of the dict to plannable_actions
-                plannable_actions.append(action)
-
+        plannable_actions = [
+            action
+            for action in agent_actions
+            if agent_actions[action]["plannable"]
+        ]
         functions = [
             {
             "name": "plan",
@@ -423,14 +410,12 @@ Function call: """
             },    
         ]
         response = openai.ChatCompletion.create(
-            #model="gpt-3.5-turbo",
             model=self.functions_model,
             messages=messages,
             functions=functions,
-            api_base=self.api_base+"/v1",
+            api_base=f"{self.api_base}/v1",
             stop=None,
             temperature=0.1,
-            #function_call="auto"
             function_call={"name": "plan"},
         )
         response_message = response["choices"][0]["message"]
@@ -459,12 +444,11 @@ Function call: """
         # old_history = process_history(conversation_history)
         # action_picker_message = "Conversation history:\n"+old_history
         # action_picker_message += "\n"
-        action_picker_message = "Request: "+user_input
+        action_picker_message = f"Request: {user_input}"
 
         picker_actions = self.agent_actions
         if self.force_action:
-            aa = {}
-            aa[self.force_action] = self.agent_actions[self.force_action]
+            aa = {self.force_action: self.agent_actions[self.force_action]}
             picker_actions = aa
             logger.info("==> Forcing action to '{action}' as requested by the user", action=self.force_action)
 
@@ -513,12 +497,12 @@ Function call: """
             if action["action"] == self.reply_action:
                 logger.info("==> LocalAGI wants to create a plan that involves more actions ")
 
-            #if postprocess:
-                #reasoning = post_process(reasoning)
             function_completion_message=""
             if len(conversation_history) > 1:
                 function_completion_message += self.process_history(conversation_history)+"\n"
-            function_completion_message += "Request: "+user_input+"\nReasoning: "+reasoning
+            function_completion_message += (
+                f"Request: {user_input}" + "\nReasoning: " + reasoning
+            )
 
             responses, function_results = self.process_functions(function_completion_message, action=action["action"])
             # Critic re-evaluates the action
@@ -549,7 +533,12 @@ Function call: """
                 # cycle subtasks and execute functions
                 subtask_result=""
                 for subtask in function_results["subtasks"]:
-                    cr="Request: "+user_input+"\nReasoning: "+action["detailed_reasoning"]+ "\n"
+                    cr = (
+                        f"Request: {user_input}"
+                        + "\nReasoning: "
+                        + action["detailed_reasoning"]
+                        + "\n"
+                    )
                     #cr="Request: "+user_input+"\n"
                     #cr=""
                     if subtask_result != "" and subtaskContext:
@@ -564,9 +553,9 @@ Function call: """
                     cr+="\nFunction to call:" +subtask["function"]+"\n"
                     logger.info("==> subtask '{subtask}' ({reasoning})", subtask=subtask["function"], reasoning=subtask_reasoning)
                     if postprocess:
-                        cr+= "Assistant: "+self.post_process(subtask_reasoning)
+                        cr += f"Assistant: {self.post_process(subtask_reasoning)}"
                     else:
-                        cr+= "Assistant: "+subtask_reasoning
+                        cr += f"Assistant: {subtask_reasoning}"
                     subtask_response, function_results = self.process_functions(cr, subtask["function"])
                     subtask_result+=str(function_results)+"\n"
                     # if postprocess:
@@ -592,7 +581,7 @@ Function call: """
             if re_evaluation_in_progress:
                 conversation_history.extend(responses)
                 return conversation_history
-                
+
             # unwrap the list of responses
             conversation_history.append(responses[-1])
 
@@ -611,9 +600,7 @@ Function call: """
                 }
             )
 
-            # logger.info the latest response from the conversation history
-            logger.info(conversation_history[-1]["content"])
-            #self.tts(conversation_history[-1]["content"])
+                #self.tts(conversation_history[-1]["content"])
         else:
             logger.info("==> no action needed")
 
@@ -627,7 +614,7 @@ Function call: """
 
             # add the response to the conversation history by extending the list
             conversation_history.extend(response)
-            # logger.info the latest response from the conversation history
-            logger.info(conversation_history[-1]["content"])
-            #self.tts(conversation_history[-1]["content"])
+                #self.tts(conversation_history[-1]["content"])
+        # logger.info the latest response from the conversation history
+        logger.info(conversation_history[-1]["content"])
         return conversation_history

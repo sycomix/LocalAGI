@@ -28,7 +28,7 @@ import urllib.request
 from datetime import datetime
 import json
 import os
-from io import StringIO 
+from io import StringIO
 FILE_NAME_FORMAT = '%Y_%m_%d_%H_%M_%S'
 
 EMBEDDINGS_MODEL = config["agent"]["embeddings_model"]
@@ -43,7 +43,7 @@ MEMORY_CHUNK_OVERLAP = int(config["agent"]["memory_chunk_overlap"])
 MEMORY_RESULTS = int(config["agent"]["memory_results"])
 MEMORY_SEARCH_TYPE = config["agent"]["memory_search_type"]
 
-if not os.environ.get("PYSQL_HACK", "false") == "false":
+if os.environ.get("PYSQL_HACK", "false") != "false":
     # these three lines swap the stdlib sqlite3 lib with the pysqlite3 package for chroma
     __import__('pysqlite3')
     import sys
@@ -77,11 +77,11 @@ def ingest(a, agent_actions={}, localagi=None):
         db = None
     else:
         Milvus.from_documents(texts,embeddings,collection_name=MEMORY_COLLECTION, connection_args={"host": MILVUS_HOST, "port": MILVUS_PORT})
-    return f"Documents ingested"
+    return "Documents ingested"
 
 def create_image(a, agent_actions={}, localagi=None):
     q = json.loads(a)
-    logger.info(">>> creating image: ") 
+    logger.info(">>> creating image: ")
     logger.info(q["description"])
     size=f"{q['width']}x{q['height']}"
     response = openai.Image.create(prompt=q["description"], n=1, size=size)
@@ -93,7 +93,11 @@ def create_image(a, agent_actions={}, localagi=None):
     embed = discord.Embed(title="Generated image")
     embed.set_image(url=f"attachment://{image_name}")
 
-    call(channel.send(file=file, content=f"Here is what I have generated", embed=embed))
+    call(
+        channel.send(
+            file=file, content="Here is what I have generated", embed=embed
+        )
+    )
 
     return f"Image created: {response['data'][0]['url']}"
 
@@ -109,7 +113,7 @@ def download_image(url: str):
 ###
 def save(memory, agent_actions={}, localagi=None):
     q = json.loads(memory)
-    logger.info(">>> saving to memories: ") 
+    logger.info(">>> saving to memories: ")
     logger.info(q["content"])
     if MILVUS_HOST == "":
         chroma_client = Chroma(collection_name=MEMORY_COLLECTION,embedding_function=embeddings, persist_directory=DB_DIR)
@@ -119,7 +123,7 @@ def save(memory, agent_actions={}, localagi=None):
     if MILVUS_HOST == "":
         chroma_client.persist()
         chroma_client = None
-    return f"The object was saved permanently to memory."
+    return "The object was saved permanently to memory."
 
 def search_memory(query, agent_actions={}, localagi=None):
     q = json.loads(query)
@@ -133,23 +137,21 @@ def search_memory(query, agent_actions={}, localagi=None):
     docs = retriever.get_relevant_documents(q["keywords"])
     text_res="Memories found in the database:\n"
 
-    sources = set()  # To store unique sources
-    
-    # Collect unique sources
-    for document in docs:
-        if "source" in document.metadata:
-            sources.add(document.metadata["source"])
-    
+    sources = {
+        document.metadata["source"]
+        for document in docs
+        if "source" in document.metadata
+    }
     for doc in docs:
         # drop newlines from page_content
         content = doc.page_content.replace("\n", " ")
         content = " ".join(content.split())
-        text_res+="- "+content+"\n"
+        text_res += f"- {content}" + "\n"
 
     # Print the relevant sources used for the answer
     for source in sources:
         if source.startswith("http"):
-            text_res += "" + source + "\n"
+            text_res += f"{source}" + "\n"
 
     chroma_client = None
     #if args.postprocess:
@@ -169,16 +171,12 @@ def save_file(arg, agent_actions={}, localagi=None):
     file = os.path.join(PERSISTENT_DIR, filename)
 
     # Check if the file already exists
-    if os.path.exists(file):
-        mode = 'a'  # Append mode
-    else:
-        mode = 'w'  # Write mode
-
+    mode = 'a' if os.path.exists(file) else 'w'
     with open(file, mode) as f:
         f.write(content)
 
     file = discord.File(file, filename=filename)
-    call(channel.send(file=file, content=f"Here is what I have generated"))
+    call(channel.send(file=file, content="Here is what I have generated"))
     return f"File {file} saved successfully."
 
 def ddg(query: str, num_results: int, backend: str = "api") -> List[Dict[str, str]]:
@@ -234,13 +232,9 @@ def search_duckduckgo(a, agent_actions={}, localagi=None):
     a = json.loads(a)
     list=ddg(a["query"], 2)
 
-    text_res=""   
-    for doc in list:
-        text_res+=f"""{doc["link"]}: {doc["title"]} {doc["snippet"]}\n"""  
-
-    #if args.postprocess:
-    #    return post_process(text_res)
-    return text_res
+    return "".join(
+        f"""{doc["link"]}: {doc["title"]} {doc["snippet"]}\n""" for doc in list
+    )
     #l = json.dumps(list)
     #return l
 

@@ -7,10 +7,11 @@ GitHub: https://https://github.com/StefanRial/ClaudeBot
 E-Mail: mail.stefanrial@gmail.com
 """
 
+
 from config import config
 import os
 
-OPENAI_API_KEY = config["openai"][str("api_key")]
+OPENAI_API_KEY = config["openai"]["api_key"]
 
 if OPENAI_API_KEY == "":
     OPENAI_API_KEY = "foo"
@@ -34,18 +35,18 @@ import functools
 import typing
 
 SERVER_ID = config["discord"]["server_id"]
-DISCORD_API_KEY = config["discord"][str("api_key")]
-OPENAI_ORG = config["openai"][str("organization")]
+DISCORD_API_KEY = config["discord"]["api_key"]
+OPENAI_ORG = config["openai"]["organization"]
 
 
 
-FILE_PATH = config["settings"][str("file_path")]
-FILE_NAME_FORMAT = config["settings"][str("file_name_format")]
+FILE_PATH = config["settings"]["file_path"]
+FILE_NAME_FORMAT = config["settings"]["file_name_format"]
 CRITIC = config["settings"]["critic"] if "critic" in config["settings"] else False
 SIZE_LARGE = "1024x1024"
 SIZE_MEDIUM = "512x512"
 SIZE_SMALL = "256x256"
-SIZE_DEFAULT = config["settings"][str("default_size")]
+SIZE_DEFAULT = config["settings"]["default_size"]
 
 GUILD = discord.Object(id=SERVER_ID)
 
@@ -104,83 +105,87 @@ def analyze_history(history, processed, callback, channel):
             callback(channel.send(f"⚙️ Called: {function_name} with {function_parameters}"))
 
 def run_localagi_thread_history(history, message, thread, loop):
-   agent.channel = message.channel
-   def call(thing):
-        return asyncio.run_coroutine_threadsafe(thing,loop).result()
-   sent_message = call(thread.send(f"⚙️ LocalAGI starts"))
+    agent.channel = message.channel
+    def call(thing):
+         return asyncio.run_coroutine_threadsafe(thing,loop).result()
 
-   user = message.author
-   def action_callback(name, parameters):
-        call(sent_message.edit(content=f"⚙️ Calling function '{name}' with {parameters}"))
-   def reasoning_callback(name, reasoning):
-        call(sent_message.edit(content=f"🤔 I'm thinking... '{reasoning}' (calling '{name}'), please wait.."))
+    sent_message = call(thread.send("⚙️ LocalAGI starts"))
 
-   localagi = LocalAGI(
-        agent_actions=agent_actions,
-        llm_model=config["agent"]["llm_model"],
-        tts_model=config["agent"]["tts_model"],
-        action_callback=action_callback,
-        reasoning_callback=reasoning_callback,     
-        tts_api_base=config["agent"]["tts_api_base"],
-        functions_model=config["agent"]["functions_model"],
-        api_base=config["agent"]["api_base"],
-        stablediffusion_api_base=config["agent"]["stablediffusion_api_base"],
-        stablediffusion_model=config["agent"]["stablediffusion_model"],
-    )
-   # remove bot ID from the message content
-   message.content = message.content.replace(f"<@{client.user.id}>", "")
-   conversation_history = localagi.evaluate(
-                message.content, 
-                history, 
-                subtaskContext=True,
-                critic=CRITIC,
-        )
-   
-   analyze_history(history, conversation_history, call, thread)
-   call(sent_message.edit(content=f"<@{user.id}> {conversation_history[-1]['content']}"))
+    user = message.author
+    def action_callback(name, parameters):
+         call(sent_message.edit(content=f"⚙️ Calling function '{name}' with {parameters}"))
+
+    def reasoning_callback(name, reasoning):
+         call(sent_message.edit(content=f"🤔 I'm thinking... '{reasoning}' (calling '{name}'), please wait.."))
+
+    localagi = LocalAGI(
+         agent_actions=agent_actions,
+         llm_model=config["agent"]["llm_model"],
+         tts_model=config["agent"]["tts_model"],
+         action_callback=action_callback,
+         reasoning_callback=reasoning_callback,     
+         tts_api_base=config["agent"]["tts_api_base"],
+         functions_model=config["agent"]["functions_model"],
+         api_base=config["agent"]["api_base"],
+         stablediffusion_api_base=config["agent"]["stablediffusion_api_base"],
+         stablediffusion_model=config["agent"]["stablediffusion_model"],
+     )
+    # remove bot ID from the message content
+    message.content = message.content.replace(f"<@{client.user.id}>", "")
+    conversation_history = localagi.evaluate(
+                 message.content, 
+                 history, 
+                 subtaskContext=True,
+                 critic=CRITIC,
+         )
+
+    analyze_history(history, conversation_history, call, thread)
+    call(sent_message.edit(content=f"<@{user.id}> {conversation_history[-1]['content']}"))
 
 def run_localagi_message(message, loop):
-   agent.channel = message.channel
-   def call(thing):
-        return asyncio.run_coroutine_threadsafe(thing,loop).result()
-   sent_message = call(message.channel.send(f"⚙️ LocalAGI starts"))
+    agent.channel = message.channel
+    def call(thing):
+         return asyncio.run_coroutine_threadsafe(thing,loop).result()
 
-   user = message.author
-   def action_callback(name, parameters):
-        call(sent_message.edit(content=f"⚙️ Calling function '{name}' with {parameters}"))
-   def reasoning_callback(name, reasoning):
-        call(sent_message.edit(content=f"🤔 I'm thinking... '{reasoning}' (calling '{name}'), please wait.."))
+    sent_message = call(message.channel.send("⚙️ LocalAGI starts"))
 
-   localagi = LocalAGI(
-        agent_actions=agent_actions,
-        llm_model=config["agent"]["llm_model"],
-        tts_model=config["agent"]["tts_model"],
-        action_callback=action_callback,
-        reasoning_callback=reasoning_callback,     
-        tts_api_base=config["agent"]["tts_api_base"],
-        functions_model=config["agent"]["functions_model"],
-        api_base=config["agent"]["api_base"],
-        stablediffusion_api_base=config["agent"]["stablediffusion_api_base"],
-        stablediffusion_model=config["agent"]["stablediffusion_model"],
-    )
-   # remove bot ID from the message content
-   message.content = message.content.replace(f"<@{client.user.id}>", "")
+    user = message.author
+    def action_callback(name, parameters):
+         call(sent_message.edit(content=f"⚙️ Calling function '{name}' with {parameters}"))
 
-   conversation_history = localagi.evaluate(
-                message.content, 
-                [], 
-                critic=CRITIC,
-                subtaskContext=True,
-        )
-   analyze_history([], conversation_history, call, message.channel)
-   call(sent_message.edit(content=f"<@{user.id}> {conversation_history[-1]['content']}"))
+    def reasoning_callback(name, reasoning):
+         call(sent_message.edit(content=f"🤔 I'm thinking... '{reasoning}' (calling '{name}'), please wait.."))
+
+    localagi = LocalAGI(
+         agent_actions=agent_actions,
+         llm_model=config["agent"]["llm_model"],
+         tts_model=config["agent"]["tts_model"],
+         action_callback=action_callback,
+         reasoning_callback=reasoning_callback,     
+         tts_api_base=config["agent"]["tts_api_base"],
+         functions_model=config["agent"]["functions_model"],
+         api_base=config["agent"]["api_base"],
+         stablediffusion_api_base=config["agent"]["stablediffusion_api_base"],
+         stablediffusion_model=config["agent"]["stablediffusion_model"],
+     )
+    # remove bot ID from the message content
+    message.content = message.content.replace(f"<@{client.user.id}>", "")
+
+    conversation_history = localagi.evaluate(
+                 message.content, 
+                 [], 
+                 critic=CRITIC,
+                 subtaskContext=True,
+         )
+    analyze_history([], conversation_history, call, message.channel)
+    call(sent_message.edit(content=f"<@{user.id}> {conversation_history[-1]['content']}"))
 
 def run_localagi(interaction, prompt, loop):
     agent.channel = interaction.channel
 
     def call(thing):
         return asyncio.run_coroutine_threadsafe(thing,loop).result()
-    
+
     user = interaction.user
     embed = discord.Embed(
         description=f"<@{user.id}> wants to chat! 🤖💬",
@@ -200,10 +205,11 @@ def run_localagi(interaction, prompt, loop):
     ))
     thread.typing()
 
-    sent_message = call(thread.send(f"⚙️ LocalAGI starts"))
+    sent_message = call(thread.send("⚙️ LocalAGI starts"))
     messages = []
     def action_callback(name, parameters):
         call(sent_message.edit(content=f"⚙️ Calling function '{name}' with {parameters}"))
+
     def reasoning_callback(name, reasoning):
         call(sent_message.edit(content=f"🤔 I'm thinking... '{reasoning}' (calling '{name}'), please wait.."))
 
@@ -248,9 +254,8 @@ def discord_message_to_message(message):
         field = message.reference.cached_message.embeds[0].fields[0]
         if field.value:
             return { "role": "user", "content": field.value }
-    else:
-        if message.content:
-            return { "role": "user", "content": message.content }
+    elif message.content:
+        return { "role": "user", "content": message.content }
     return None
 
 @client.event
